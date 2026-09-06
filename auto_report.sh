@@ -236,3 +236,10 @@ ps -eo pid,comm,%cpu,%mem --sort=-%mem 2>/dev/null | awk 'NR>1 && NR<=4 {printf 
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🤖 Auto Report by OpenClaw Monitor"
+
+# Exit Code làm cờ (Flag) cho OpenClaw / Automation script
+case "$OVERALL" in
+    CRITICAL) exit 2 ;;
+    WARNING)  exit 1 ;;
+    *)        exit 0 ;;
+esac
