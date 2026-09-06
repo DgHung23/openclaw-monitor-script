@@ -75,42 +75,38 @@ echo "$MONITOR_USER:$USER_PASS" | chpasswd
 echo -e "${GREEN}  ✓ Đã thiết lập mật khẩu cho user $MONITOR_USER${NC}"
 
 # ------------------------------------------------------------------------------
-# 3. Cấu hình SSH Authorized Keys (Hỗ trợ Public Key từ OpenClaw)
+# 3. Tạo SSH Key Pair & cấu hình Authorized Keys
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[3/5] Đang cấu hình SSH Keys cho OpenClaw...${NC}"
+echo -e "${BLUE}[3/5] Đang tạo SSH Key Pair cho OpenClaw...${NC}"
 
 USER_HOME=$(eval echo "~$MONITOR_USER")
 SSH_DIR="$USER_HOME/.ssh"
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
 
-# Kiểm tra nếu người dùng truyền Public Key từ OpenClaw qua tham số ($1) hoặc biến môi trường
-OPENCLAW_PUBKEY="${1:-$OPENCLAW_PUBKEY}"
-
-if [[ -n "$OPENCLAW_PUBKEY" ]]; then
-    echo "$OPENCLAW_PUBKEY" >> "$SSH_DIR/authorized_keys"
-    echo -e "${GREEN}  ✓ Đã nạp Public Key của OpenClaw Host vào authorized_keys!${NC}"
-fi
-
-# Tự động sinh thêm 1 cặp Local Key dự phòng
 TEMP_KEY=$(mktemp -u /tmp/openclaw_key_XXXXXX)
+# Ưu tiên Ed25519, fallback RSA nếu distro cũ không hỗ trợ
 if ! ssh-keygen -t ed25519 -N "" -f "$TEMP_KEY" -C "openclaw-monitor-$(hostname)" -q 2>/dev/null; then
     ssh-keygen -t rsa -b 4096 -N "" -f "$TEMP_KEY" -C "openclaw-monitor-$(hostname)" -q
 fi
 
+# Thêm public key vào authorized_keys
 cat "${TEMP_KEY}.pub" >> "$SSH_DIR/authorized_keys"
 chmod 600 "$SSH_DIR/authorized_keys"
 chown -R "$MONITOR_USER:$MONITOR_USER" "$SSH_DIR"
 
+# Lưu private key cho admin copy
 cp "$TEMP_KEY" "$PRIVATE_KEY_BACKUP"
 chmod 600 "$PRIVATE_KEY_BACKUP"
+
 cp "$TEMP_KEY" "$LOCAL_KEY_BACKUP"
 chmod 600 "$LOCAL_KEY_BACKUP"
 
 PRIVATE_KEY_CONTENT=$(cat "$TEMP_KEY")
 rm -f "$TEMP_KEY" "${TEMP_KEY}.pub"
 
-echo -e "${GREEN}  ✓ Đã cấu hình hoàn tất SSH Authorized Keys cho $MONITOR_USER${NC}"
+echo -e "${GREEN}  ✓ Đã cấu hình SSH Authorized Keys cho $MONITOR_USER${NC}"
+echo -e "${GREEN}  ✓ Private key đã được lưu tại: $PRIVATE_KEY_BACKUP và $LOCAL_KEY_BACKUP${NC}"
 
 # ------------------------------------------------------------------------------
 # 4. Kiểm tra dịch vụ SSH
@@ -154,10 +150,13 @@ echo ""
 echo -e "${BOLD}2. LỆNH TEST SSH TỪ OPENCLAW HOST:${NC}"
 echo -e "   ${CYAN}ssh -i openclaw_id_ed25519 -p $SSH_PORT $MONITOR_USER@$TARGET_IP $TARGET_SCRIPT${NC}"
 echo ""
-echo -e "${BOLD}3. NỘI DUNG SSH PRIVATE KEY (Copy nguyên block bên dưới vào OpenClaw):${NC}"
+echo -e "${BOLD}3. NỘI DUNG SSH PRIVATE KEY (Nếu OpenClaw dùng key của máy này):${NC}"
 echo -e "${YELLOW}-------------------------- BẮT ĐẦU KEY --------------------------${NC}"
 echo "$PRIVATE_KEY_CONTENT"
 echo -e "${YELLOW}-------------------------- KẾT THÚC KEY -------------------------${NC}"
+echo ""
+echo -e "${YELLOW}${BOLD}📌 [NOTE] Waiting for OpenClaw public key paste on system:${NC}"
+echo -e "   echo '<OPENCLAW_PUBLIC_KEY>' >> $SSH_DIR/authorized_keys"
 echo ""
 echo -e "${BOLD}4. GỢI Ý PROMPT RA LỆNH CHO OPENCLAW (Ngôn ngữ tự nhiên):${NC}"
 echo -e "${CYAN}\"Cứ mỗi 10 phút một lần, hãy SSH vào máy $TARGET_IP (user: $MONITOR_USER, port: $SSH_PORT, sử dụng SSH key) và chạy lệnh '$TARGET_SCRIPT'. Lấy kết quả output trả về và gửi tin nhắn thông báo qua Zalo cho 3 admin: [SĐT_Admin_1], [SĐT_Admin_2], [SĐT_Admin_3].\"${NC}"
